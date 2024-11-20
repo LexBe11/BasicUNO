@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f9;
+            flex-direction: column;
+        }
+        .game-board {
+            text-align: center;
+        }
+        .card-container {
+            display: inline-block;
+            margin: 5px;
+            position: relative;
+            cursor: pointer;
+        }
+        .card {
+            display: inline-block;
+            width: 50px;
+            height: 80px;
+            background-color: #fff;
+            border-radius: 5px;
+            margin: 5px;
+            text-align: center;
+            line-height: 80px;
+            font-size: 18px;
+            border: 1px solid #000;
+            transition: transform 0.2s ease-in-out;
+        }
+        .card.red { background-color: red; color: white; }
+        .card.green { background-color: green; color: white; }
+        .card.blue { background-color: blue; color: white; }
+        .card.yellow { background-color: yellow; color: black; }
+        .card.special { background-color: grey; color: white; }
+
+        /* Special action cards */
+        .card.skip::before {
+            content: "🚫"; /* Skip icon */
+            font-size: 30px;
+        }
+        .card.reverse::before {
+            content: "🔄"; /* Reverse icon */
+            font-size: 30px;
+        }
+        .card.double_skip::before {
+            content: "🚫🚫"; /* Double Skip icon */
+            font-size: 30px;
+        }
+        .card.switch_piles::before {
+            content: "↔️"; /* Switch Piles icon */
+            font-size: 30px;
+        }
+
+        #message {
+            font-size: 20px;
+            margin-top: 20px;
+        }
+
+        .hidden {
+            visibility: hidden;
+        }
+
+        .play-card {
+            transform: translateY(-100px);
+        }
+
+        #pickup-btn {
+            margin-top: 20px;
+            font-size: 18px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #pickup-btn:disabled {
+            background-color: #888;
+        }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 600px) {
+            .card {
+                width: 40px;
+                height: 65px;
+                font-size: 16px;
+            }
+        }
+
+        /* Pile and deck */
+        #discard-pile {
+            width: 60px;
+            height: 90px;
+            background-color: #f5f5f5;
+            margin-top: 20px;
+            border-radius: 10px;
+            border: 2px solid #ddd;
+            display: inline-block;
+            position: relative;
+        }
+
+        #discard-pile .card {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-board">
+        <h1>UNO Game</h1>
+        <div id="player-cards">
+            <!-- Player's cards will be displayed here -->
+        </div>
+        <div id="message"></div>
+        <div id="discard-pile">
+            <!-- Discard pile will be displayed here -->
+        </div>
+        <button id="pickup-btn">Pick Up Card</button>
+    </div>
+
+    <script>
+        // Card definition: color and number or action (e.g., Skip, Reverse, Double Skip)
+        const colors = ['red', 'green', 'blue', 'yellow'];
+        const actions = ['skip', 'reverse', 'double_skip', 'switch_piles']; // Special actions
+        const numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+        // Deck generation
+        function generateDeck() {
+            let deck = [];
+            // Adding number cards
+            colors.forEach(color => {
+                for (let i = 0; i <= 9; i++) {
+                    deck.push({ color: color, value: i.toString() });
+                }
+            });
+            // Adding special action cards (Skip, Reverse, Double Skip, Switch Piles)
+            colors.forEach(color => {
+                actions.forEach(action => {
+                    deck.push({ color: color, value: action });
+                });
+            });
+            return deck;
+        }
+
+        // Shuffling the deck
+        function shuffleDeck(deck) {
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+            return deck;
+        }
+
+        // Initial game state
+        let deck = shuffleDeck(generateDeck());
+        let players = [
+            { id: 'player', cards: [] },
+            { id: 'bot1', cards: [] },
+            { id: 'bot2', cards: [] },
+            { id: 'bot3', cards: [] },
+        ];
+        let currentPlayer = 'player'; // Start with player
+        let discardPile = [deck.pop()]; // First card on discard pile
+
+        // Deal 7 cards to each player and bot
+        function dealCards() {
+            players.forEach(player => {
+                for (let i = 0; i < 7; i++) {
+                    player.cards.push(deck.pop());
+                }
+            });
+            displayCards();
+        }
+
+        // Display cards
+        function displayCards() {
+            const playerCardsDiv = document.getElementById('player-cards');
+            playerCardsDiv.innerHTML = ''; // Clear existing cards
+            players[0].cards.forEach((card, index) => {
+                const cardElement = document.createElement('div');
+                cardElement.classList.add('card', card.color);
+                cardElement.innerText = card.value;
+                cardElement.draggable = true;
+                cardElement.setAttribute('data-index', index);
+                cardElement.addEventListener('dragstart', handleDragStart);
+                playerCardsDiv.appendChild(cardElement);
+            });
+        }
+
+        // Handle drag start
+        function handleDragStart(event) {
+            event.dataTransfer.setData('text', event.target.getAttribute('data-index'));
+        }
+
+        // Handle drop on discard pile
+        document.getElementById('discard-pile').addEventListener('dragover', function(event) {
+            event.preventDefault(); // Allow drop
+        });
+
+        document.getElementById('discard-pile').addEventListener('drop', function(event) {
+            event.preventDefault();
+            const index = event.dataTransfer.getData('text');
+            playCard(index);
+        });
+
+        // Play a card
+        function playCard(index) {
+            const card = players[0].cards[index];
+            players[0].cards.splice(index, 1); // Remove card from player hand
+            discardPile.push(card); // Add card to discard pile
+
+            // Display played card on the discard pile
+            const discardPileDiv = document.getElementById('discard-pile');
+            const playedCard = document.createElement('div');
+            playedCard.classList.add('card', card.color);
+            playedCard.innerText = card.value;
+            discardPileDiv.appendChild(playedCard);
+
+            // Update the game state
+            displayCards();
+            checkForValidMove();
+        }
+
+        // Pick up card (button event)
+        document.getElementById('pickup-btn').addEventListener('click', function() {
+            const pickedCard = deck.pop();
+            players[0].cards.push(pickedCard);
+            displayCards();
+            checkForValidMove();
+        });
+
+        // Check if a move is valid (basic check for now)
+        function checkForValidMove() {
+            const currentCard = discardPile[discardPile.length - 1];
+            const message = document.getElementById('message');
+
+            // Example condition: player must match color or number
+            let validMove = players[0].cards.some(card => 
+                card.color === currentCard.color || card.value === currentCard.value);
+
+            if (!validMove) {
+                message.textContent = "No valid cards to play. Please pick up a card.";
+                document.getElementById('pickup-btn').disabled = false;
+            } else {
+                message.textContent = "Your turn to play a card!";
+                document.getElementById('pickup-btn').disabled = true;
+            }
+        }
+
+        // Initialize the game
+        dealCards();
+    </script>
+</body>
+</html>
